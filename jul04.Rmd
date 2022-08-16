@@ -1,0 +1,316 @@
+---
+title: "July4"
+output: html_document
+---
+
+```{r setup, include=FALSE}
+knitr::opts_chunk$set(echo = TRUE)
+```
+
+```{r}
+library(quanteda)
+library(quanteda.sentiment)
+library(quanteda.dictionaries)
+library(jsonlite)
+library(academictwitteR)
+library(stringr)
+```
+
+```{r}
+# reading tweets from csv
+hk_tweets <- read.csv("data/csv/hk_tweets_sentr.csv", header = T, stringsAsFactors=F)
+sg_tweets <- read.csv("data/csv/sg_tweets_sentr.csv", header = T, stringsAsFactors=F)
+
+head(sg_tweets)
+head(hk_tweets)
+```
+
+```{r}
+# getting policy/ government related tweets
+clean <- grep('polic?|law?|govern?|rule?|lockdown?|social distanc?|border?|safe distanc?|mandate?|vacc?|measure?|outdoor mask?|SingHealth Polyclinics|SHP|advisor?|restrict?|social gather?|circuit breaker?|Contact tracing|SafeEntry|TraceTogether|re-open?|reopen?|phase|Reciprocal Green Lane|Periodic Commuting Arrangement|PCA|RGL|quarantine reduc?|quarantine arrangement|Air Travel Pass|COVID-19 (Temporary Measures) Act 2020|suspen?|Travel Bubble?|quarantine-free|quarantine duration|Vaccinated Travel Lane|vtl|Border control|strateg?|Living with COVID?', sg_tweets$text, ignore.case=TRUE)
+
+sg_clean <- sg_tweets[clean,]
+
+# getting rid of the retweets
+retweet <- grep('^RT @', sg_clean$text, ignore.case=TRUE)
+sg_clean_no_retweet <- sg_clean[-retweet,]
+
+head(sg_clean)
+
+# seeing who is mentioned the most
+handles_sg <- str_extract_all(sg_clean$text, '@[0-9_A-Za-z]+')
+handles_sg[1:3]
+handles_sg_vec <- unlist(handles_sg)
+head(sort(table(handles_sg_vec), decreasing = TRUE), n=10)
+```
+
+```{r}
+# loading json twitter file
+json_data <- fromJSON("data_hk2020/data_1296422970332778498.json", flatten = TRUE) %>% as.data.frame
+View(json_data)
+
+testing_hk <- convert_json("data_hk2020/data_1296422970332778498.json", output_format = "tidy")
+head(testing_hk)
+```
+
+```{r}
+# attempt on time-series
+library(CausalImpact)
+
+set.seed(1)
+x1 <- 100 + arima.sim(model = list(ar = 0.999), n = 100)
+y <- 1.2 * x1 + rnorm(100)
+y[71:100] <- y[71:100] + 10
+data <- cbind(y, x1)
+
+dim(data)
+matplot(data, type = "l")
+```
+
+```{r}
+pre.period <- c(1, 70)
+post.period <- c(71, 100)
+
+impact <- CausalImpact(data, pre.period, post.period)
+plot(impact)
+
+
+time.points <- seq.Date(as.Date("2014-01-01"), by = 1, length.out = 100)
+data <- zoo(cbind(y, x1), time.points)
+head(data)
+
+pre.period <- as.Date(c("2014-01-01", "2014-03-11"))
+post.period <- as.Date(c("2014-03-12", "2014-04-10"))
+
+impact <- CausalImpact(data, pre.period, post.period)
+plot(impact)
+```
+```{r}
+library(tidyverse)
+
+head(sg_clean)
+min(as.Date(sg_clean$created_at))
+max(as.Date(sg_clean$created_at))
+
+# changing the created_at as date type
+sg_clean$created_at <- as.Date(sg_clean$created_at)
+
+sg_group <- sg_clean %>% group_by(created_at) %>%
+  summarise(sentiment_mean = mean(sentimentr), observations = n())
+sg_group
+sg_zoo
+y <- sg_group$sentiment_mean
+time <- sg_group$created_at
+sg_zoo <- zoo(y, time)
+
+pre_open <- as.Date(c("2020-05-14","2021-06-15"))
+post_open <- as.Date(c("2021-06-16","2022-05-31"))
+
+impact_open <- CausalImpact(sg_zoo, pre_open, post_open)
+
+plot(impact_open)
+```
+
+
+```{r}
+# repeat for hk tweets
+
+# getting policy/ government related tweets
+clean_hk <- grep('polic?|law?|govern?|rule?|lockdown?|social.distanc?|border?|safe distanc?|mandat?|compulsory vaccination|measure?|outdoor mask?|advisor?|restrict?|social gather?|circuit breaker?|Contact tracing|re-open?|reopen?|phase|quarantine reduc?|quarantine arrangement|suspen?|Travel Bubble?|quarantine-free|quarantine duration|Border control|strateg?|Living with COVID?|zero-COVID|quarantine hotel?|public gather?|Emergency Regulations Ordinance|Centre for Health Protection |CHP｜PPE|self-isolat?|four-person limit|Hospital Authority|cross-border|cash handout?|Compulsory Quarantine Order|track?|1.5 meters|capacity|mobile cabin hospital|eating.in|dine-in|ban|Return2hk scheme|surveillance|sinovac|LeaveHomeSafe|CoronaVac|essential requirement|Penny\'s Bay|hamster?|chinchilla?|zero Covid|school closure?|vaccine hesitancy|inducement?|mass testing|Nicole Kidman', hk_tweets$text, ignore.case=TRUE)
+
+hk_clean <- hk_tweets[clean_hk,]
+
+# getting rid of the retweets
+retweet_hk <- grep('^RT @', hk_clean$text, ignore.case=TRUE)
+hk_clean_no_retweet <- hk_clean[-retweet_hk,]
+
+head(hk_clean)
+
+# seeing who is mentioned the most
+handles_hk <- str_extract_all(hk_clean$text, '@[0-9_A-Za-z]+')
+handles_hk[1:3]
+handles_hk_vec <- unlist(handles_hk)
+head(sort(table(handles_hk_vec), decreasing = TRUE), n=10)
+```
+
+```{r}
+# same for hk cleaned data
+
+head(hk_clean)
+min(as.Date(hk_clean$created_at))
+max(as.Date(hk_clean$created_at))
+
+# changing the created_at as date type
+sg_clean$created_at <- as.Date(sg_clean$created_at)
+
+sg_group <- sg_clean %>% group_by(created_at) %>%
+  summarise(sentiment_mean = mean(sentimentr), observations = n())
+sg_group
+sg_zoo
+y <- sg_group$sentiment_mean
+time <- sg_group$created_at
+sg_zoo <- zoo(y, time)
+
+pre_open <- as.Date(c("2020-05-14","2021-06-15"))
+post_open <- as.Date(c("2021-06-16","2022-05-31"))
+
+impact_open <- CausalImpact(sg_zoo, pre_open, post_open)
+
+plot(impact_open)
+```
+
+```{r}
+hkcorpus <- corpus(hk_tweets)
+```
+
+```{r}
+hk_tweets$text[1]
+hk_tweets %>% head() %>% select(text) %>% vader_df()
+print(hk_tweets$text[1:6])
+```
+
+```{r}
+testing <- hk_tweets %>% head() %>%
+  select(text) %>% get_sentences %>% sentiment_by()
+testing
+
+testingdf <- hk_tweets %>% head()
+
+# (out <- with(
+#     testingdf, 
+#     sentiment_by(
+#         get_sentences(text), 
+#         list(created_at)
+#     )
+# ))
+# plot(out)
+library(dplyr)
+testingdf %>%
+    mutate(sentimentr = sentiment_by(get_sentences(text))$ave_sentiment)
+testing
+```
+```{r}
+hk_tweets <- hk_tweets %>% mutate(sentimentr = sentiment_by(get_sentences(text))$ave_sentiment)
+```
+
+```{r}
+write.csv(hk_tweets,"data/csv/hk_tweets_sentr.csv", row.names = FALSE)
+```
+
+```{r}
+sg_tweets <- sg_tweets %>% mutate(sentimentr = sentiment_by(get_sentences(text))$ave_sentiment)
+```
+
+```{r}
+write.csv(sg_tweets,"data/csv/sg_tweets_sentr.csv", row.names = FALSE)
+```
+
+```{r}
+head(hk_tweets)
+```
+```{r}
+testingdf <- hk_tweets %>% head()
+
+
+
+testingdf <- testingdf %>%
+    mutate(vadar = vader_df(text)$compound)
+
+testingdf
+```
+```{r}
+# trying the wordcloud
+
+# create corpus
+hkcorpus <- corpus(hk_tweets$text)
+summary(hkcorpus, n=10)
+```
+
+```{r}
+# create tokens and dfm
+covidtoks <- tokens(hkcorpus, remove_punct = TRUE, remove_url=TRUE, verbose=TRUE)
+covidtoks <- tokens_remove(covidtoks, c(
+  stopwords("english"), "t.co", "https", "rt", "amp", "http", "t.c", "can", "u"))
+coviddfm <- dfm(covidtoks, tolower=TRUE, verbose=TRUE)
+coviddfm
+```
+```{r}
+# topfeatures(coviddfm, 25)
+# textplot_wordcloud(coviddfm, rotation=0, min_size=.75, max_size=3, max_words=50)
+
+hkcovidtoks <- tokens_remove(covidtoks, c("hong", "kong", "covid", "covid-19", "#hongkong", "hk", "coronavirus", "#covid19", "kong's"))
+hkcoviddfm <- dfm(hkcovidtoks, tolower=TRUE, verbose=TRUE)
+hkcoviddfm
+
+topfeatures(hkdfm, 50)
+textplot_wordcloud(hkdfm, rotation=0, min_size=.75, max_size=3, max_words=50)
+```
+```{r}
+hktoks_remove <- tokens_remove(
+  hktoks, c("hong", "kong", "covid", "covid-19", "#hongkong", "hk", "coronavirus", "#covid19", "kong's",
+            "pandemic", "#coronavirus", "virus", "s", "says", "just"))
+hkdfm_remove <- dfm(hktoks_remove, tolower=TRUE, verbose=TRUE)
+
+topfeatures(hkdfm_remove, 50)
+textplot_wordcloud(hkdfm_remove, min_size=.75, max_size=3, max_words=50,
+                   rotation = 0.25, 
+                   color = rev(RColorBrewer::brewer.pal(10, "RdBu")))
+```
+```{r}
+hk_analysis_before <- hk_analysis %>% filter(month >= "2020-10" & month < "2021-11")
+hk_analysis_after <- hk_analysis %>% filter(month >= "2021-11")
+
+hkcorpus_before <- corpus(hk_analysis_before)
+summary(hkcorpus_before, n=10)
+
+# further cleaning of the tokens
+hktoks_before <- tokens(hkcorpus_before, remove_punct = TRUE, remove_url=TRUE, verbose=TRUE)
+hktoks_before <- tokens_remove(
+  hktoks_before, c(stopwords("english"), "t.co", "https", "rt", "amp", "http", "t.c", "can", "u",
+                   "hong", "kong", "covid", "covid-19", "#hongkong", "hk", "coronavirus",
+                   "#covid19","kong's", "pandemic", "#coronavirus", "virus", "s", "says", "just"))
+hkdfm_before <- dfm(hktoks_before, tolower=TRUE, verbose=TRUE)
+
+topfeatures(hkdfm_before, 50)
+textplot_wordcloud(hkdfm_before, min_size=.75, max_size=3, max_words=50,
+                   rotation = 0.25, 
+                   color = rev(RColorBrewer::brewer.pal(10, "RdBu")))
+
+# wordcloud after
+
+hkcorpus_after <- corpus(hk_analysis_after)
+summary(hkcorpus_after, n=10)
+
+# further cleaning of the tokens
+hktoks_after <- tokens(hkcorpus_after, remove_punct = TRUE, remove_url=TRUE, verbose=TRUE)
+hktoks_after <- tokens_remove(
+  hktoks_after, c(stopwords("english"), "t.co", "https", "rt", "amp", "http", "t.c", "can", "u",
+                   "hong", "kong", "covid", "covid-19", "#hongkong", "hk", "coronavirus",
+                   "#covid19","kong's", "pandemic", "#coronavirus", "virus", "s", "says", "just"))
+hkdfm_after <- dfm(hktoks_after, tolower=TRUE, verbose=TRUE)
+
+topfeatures(hkdfm_after, 50)
+textplot_wordcloud(hkdfm_after, min_size=.75, max_size=3, max_words=50,
+                   rotation = 0.25, 
+                   color = rev(RColorBrewer::brewer.pal(10, "RdBu")))
+
+
+```
+
+```{r}
+topfeatures(sgdfm, 50)
+textplot_wordcloud(sgdfm, rotation=0, min_size=.75, max_size=3, max_words=50)
+```
+
+```{r}
+sgtoks_remove <- tokens_remove(
+  sgtoks, c("singapore", "#covid19", "covid", "covid-19", "#singapore", "coronavirus", "singapore's",
+            "pandemic", "#coronavirus", "virus", "s", "still", "just", "also"))
+sgdfm_remove <- dfm(sgtoks_remove, tolower=TRUE, verbose=TRUE)
+
+topfeatures(sgdfm_remove, 50)
+textplot_wordcloud(sgdfm_remove, min_size=.75, max_size=3, max_words=50,
+                   rotation = 0.25, 
+                   color = rev(RColorBrewer::brewer.pal(10, "RdBu")))
+```
+

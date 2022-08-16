@@ -1,0 +1,484 @@
+---
+title: "testing"
+output: html_document
+---
+
+title: "Twitter Rest API"
+author: "Pablo Barbera, Ken Benoit, Friedrich Geiecke"
+date: "25/10/2021"
+output: html_document
+
+
+In this file, we will look at static Twitter data, either recent tweets or user-level information. This type of data can be retrieved with Twitter's REST API. We will use the `rtweet` package here.
+
+Loading packages:
+
+```{r}
+library("rtweet")
+library("stringr")
+library("tidyverse")
+library(twitteR)
+```
+
+First we need to authenticate. After your application has been approved, you can paste the consumer key, consumer secret, access token, and access token secret strings into the list below:
+
+```{r}
+authentication <- list(consumer_key = "Y7gC6L4C23Uj2Dt8vCm2AtwnP",
+                 consumer_secret = "32r1q72144BInxYwJPZJyhdXrjA9Rc0sJuW5R34ZmfGuurFJNt",
+                 access_token = "1453057025022337027-HEzZK41BdX2i5N23EmrFJR3wFValPG",
+                 access_token_secret = "HzNK9VmiFLb0iz6eMaDAEKaKBMcRx9M3HKNeKUcJY5OUT")
+```
+
+A more convenient approach, which importantly does not depict your individual tokens, can be to store this list once after you have pasted your keys and then to reload it when running some code. Store the list once with:
+
+```{r}
+save(authentication, file = "myauthentication.rda")
+```
+
+To load the list containing your authentication whenever you run such a script, you can then simply add the following cell in the future (if the `myauthentication.rda` file is contained in the directory):
+
+```{r}
+load("myauthentication.rda")
+```
+
+Lastly, if the cell below outputs `LSEnews` after running, we are good to go:
+```{r}
+#using twitteR
+
+setup_twitter_oauth(authentication$consumer_key, authentication$consumer_secret, authentication$access_token, authentication$access_token_secret)
+```
+
+```{r}
+# Replace the app name with your own!
+twitter_token <- create_token(app = "enter your app name here",
+                              consumer_key = authentication$consumer_key,
+                              consumer_secret = authentication$consumer_secret,
+                              access_token = authentication$access_token,
+                              access_secret = authentication$access_token_secret)
+
+lookup_users("LSEnews")$screen_name
+```
+
+### Searching recent tweets
+
+It is possible to download recent tweets, but only up those less than 7 days old, and in some cases not all of them.
+
+The following code will get the last 1,000 tweets mentioning "brexit" and "fuel":
+
+```{r}
+tweets_0428 <- search_tweets("#covid", n = 5000)
+tweets_0428_hk <- search_tweets("#hongkong", n = 5000)
+tweets_0428_hk_covid <- search_tweets("covid AND hong kong", n = 5000, lang="en")
+#using twitteR
+tweets_0428 <- searchTwitter("#covid AND #hongkong", n = 2000, lang ="en")
+tweets_hk <- search_tweets("hong kong", n = 5000)
+head(tweets_hk)
+unique(tweets_hk$text)
+```
+
+```{r}
+tweets <- tweets %>% select(-c("bbox_coords", "coords_coords", "geo_coords"))
+tweets <- as.data.frame(tweets)
+
+summary(tweets)
+tweets_text <- tweets %>% select("text")
+head(tweets_text)
+# write.csv(tweets_text, "hk_covid_0427.csv", row.names = FALSE)
+
+tweets_hk_trim <- tweets_hk %>% select("text")
+unique(tweets_hk_trim)
+# write.csv(tweets_hk_trim, "hk_0427.csv", row.names = FALSE)
+
+
+```
+
+What are the most popular hashtags?
+
+```{r}
+ht <- str_extract_all(tweets_hk$text, "#[A-Za-z0-9_]+")
+ht <- unlist(ht)
+head(sort(table(ht), decreasing = TRUE))
+```
+
+You can check the documentation about the options for string search [here](https://dev.twitter.com/rest/public/search).
+
+### Extracting users' profile information
+
+This is how you would extract information from user profiles:
+
+```{r}
+users <- lookup_users(c("JoeBiden", "POTUS", "VP", "FLOTUS", "BarackObama"))
+users
+```
+
+Which of these has the most followers?
+
+```{r}
+users %>% select(screen_name, followers_count) %>% arrange(desc(followers_count))
+```
+
+### Downloading recent tweets from a specific user
+
+Download recent tweets from a specific account (the maximum number of most recent tweets that can be freely downloaded per account is ~3200):
+
+```{r}
+tweets <- get_timeline("JoeBiden", n = 1000)
+```
+
+What are the most common hashtags used?
+
+```{r}
+ht <- str_extract_all(tweets$text, "#[A-Za-z0-9_]+")
+ht <- unlist(ht)
+head(sort(table(ht), decreasing = TRUE))
+```
+
+### Other types of data
+
+The REST API also offers a long list of other endpoints that could be of use at some point, depending on your research interests. For example, if you know the ID of the tweets, you can download them directly from the API. This is useful because tweets cannot be redistributed as part of the replication materials of a published paper, but the list of tweet IDs can sometimes be shared. For example, a recent tweet of Barack Obama:
+
+```{r}
+# Downloading tweets when you know the ID
+tw <- lookup_tweets(1514426242564440064)
+tw$text
+tw$geo_coords
+
+```
+
+Furthermore, lists of Twitter users, compiled by other users, can also be accessed through the API. For example, this obtains a list of 550 Twitter accounts of US members of congress:
+
+```{r}
+# Download user information from a list (words in the list name are separated
+# by a hyphen when using it as input into the slug variable)
+congress_members <- lists_members(slug = "members-of-congress", owner_user = "cspan")
+head(congress_members)
+```
+
+
+```{r}
+apr14 <- read.csv("data/2022_april14_april15.csv", header = F, colClasses = "character")
+head(apr14)
+toString(apr14$V1[1])
+apr1 <- lookup_tweets(apr14$V1[1])
+
+testingdff <- lapply(apr14$V1, lookup_tweets)
+testingagain <- lapply(testingdff, rbind)
+againandagain <- testingdff %>% reduce(inner_join,by = c("status_id"))
+```
+```{r}
+stream_tweets(q = "", timeout = 30, file_name='streamed_tweets.json')
+sample_tweets <- tryCatch({parse_stream('streamed_tweets.json')},
+                       error = function(e)
+                           {print(paste("Retrying with alternative function after initial error when parsing file",
+                                        'streamed_tweets.json'));
+                           return(recover_stream('streamed_tweets.json'))})
+head(sample_tweets)
+head(sample_tweets$text)
+
+keyword_tweets <- stream_tweets(q = "covid", timeout = 40)
+head(keyword_tweets)
+head(keyword_tweets$text)
+```
+
+```{r}
+#5/5/2022
+
+tweets_0505 <- search_tweets("#covid", n = 5000)
+
+tweets_0505_hk_covid <- search_tweets("covid AND hong kong", n = 5000, lang="en")
+```
+
+```{r}
+head(tweets_0505_hk_covid)
+```
+
+```{r}
+tweets_0506_sg <- search_tweets("singapore AND covid", n = 5000)
+
+```
+
+```{r}
+tweets_0506_sg
+```
+
+```{r}
+
+csv626 <- read_csv("data/corona_tweets_626.csv", col_names = FALSE)
+head(csv626)
+csv626 <- csv626 %>% select(X1)
+head(csv626)
+
+write.table(csv626, file = "txt626.txt", sep = "\t",
+            row.names = FALSE, col.names = FALSE)
+
+csv626[1,]
+
+
+csv414 <- read_csv("data/2022_april14_april15.csv", col_names = FALSE)
+
+csv414 <- csv414 %>% select(X1)
+head(csv414)
+
+write.table(csv414, file = "txt414.txt", sep = "\t",
+            row.names = FALSE, col.names = FALSE)
+
+```
+
+```{r}
+csv_01 <- read.csv(file = "data/IEEE data/corona_tweets_1-100/corona_tweets_01.csv", header = FALSE, as.is = TRUE, colClasses = "character")[,1]
+
+
+```
+
+```{r}
+head(csv_01, 20)
+
+write.table(csv_01, file = "txt01.txt", sep = "\t",
+            row.names = FALSE, col.names = FALSE,
+            quote = FALSE)
+```
+
+```{r}
+txt_in_bulk <- function(file, temp_name ){
+  
+  write.table(file, file = paste0("data/temp/txt",temp_name,".txt"), sep = "\t",
+            row.names = FALSE, col.names = FALSE,
+            quote = FALSE)
+}
+
+
+
+read_in_bulk <- function(file){
+  filename <- paste0("csv_",file)
+  print(filename)
+  filename <- read.csv(file = paste0("data/IEEE data/corona_tweets_1-100/corona_tweets_", file, ".csv"), header = FALSE, as.is = TRUE, colClasses = "character")[,1]
+  return (filename)
+}
+
+read_in_bulk("02")
+
+csv_02 <- read_in_bulk("02")
+
+txt_in_bulk(csv_02)
+
+```
+
+```{r}
+file_seq <- c()
+file_cont <- c()
+for (i in 51:70){
+  temp_name <- i
+  if (i < 10){
+    temp_name <- paste0("0",i)
+  }
+   
+  # file_seq <- c(file_seq, temp_name)
+  file <- read_in_bulk(temp_name)
+  file_cont <- c(file_cont, file)
+  
+}
+tail(file_cont)
+head(file_cont)
+txt_in_bulk(file_cont, "42_50")
+
+for (i in 42:50) {
+  print(i)
+}
+```
+
+```{r}
+library(vader)
+
+get_vader("Today is a good day but I miss my grandma.")$compound
+```
+
+```{r}
+vader_df("Today is a good day but I miss my grandma.")$compound
+```
+
+
+```{r}
+data_1 <- data.frame(date = as.Date(c("2022-02-11",     # Create example data
+                                    "2010-12-01",
+                                    "1955-02-08",
+                                    "2005-01-01",
+                                    "2021-01-02",
+                                    "2021-01-03",
+                                    "2021-01-04")))
+
+data_1
+data_1$week <- strftime(data_1$date, format = "%Y-W%V")
+data_1
+
+library(lubridate)
+data_1$day <- as.POSIXlt(data_1$date)$yday 
+data_1$year <- format(data_1$date, format = "%Y")
+data_1$week2 <- data_1$day %/%7 +1 
+data_1$week2
+data_1$week_iso <- ISOweek(data_1$date)
+
+library(ISOweek)
+ISOweek2date(paste0(data_1$year,"-W",sprintf("%02d",data_1$week2),"-1"))
+ISOweek2date(paste0(data_1$week_iso,"-1"))
+data_1
+```
+
+```{r}
+set.seed(1)
+x1 <- -100 + arima.sim(model = list(ar = 0.999), n = 100)
+y <- 1.2 * x1 + rnorm(100)
+y[71:100] <- y[71:100] - 10
+data <- cbind(y, x1)
+
+matplot(data, type = "l")
+
+pre.period <- c(1, 70)
+post.period <- c(71, 100)
+
+impact <- CausalImpact(data, pre.period, post.period)
+```
+
+```{r}
+plot(impact)
+
+time.points <- seq.Date(as.Date("2014-01-01"), by = 1, length.out = 100)
+data <- zoo(cbind(y, x1), time.points)
+head(data)
+
+pre.period <- as.Date(c("2014-01-01", "2014-03-11"))
+post.period <- as.Date(c("2014-03-12", "2014-04-10"))
+
+impact <- CausalImpact(data, pre.period, post.period)
+plot(impact)
+```
+```{r}
+summary(impact)
+summary(impact, "report")
+```
+```{r}
+
+plot(hk_analysis$sentimentr, hk_analysis$sentiment_nb)
+
+ggplot(aes(x=sentimentr,y=sentiment_nb),data=hk_analysis)+
+  geom_point()
+
+```
+```{r}
+library(ggplot2)
+# change sentiment_nb into factor
+hk_analysis$sentiment_nb_fac <- as.factor(hk_analysis$sentiment_nb)
+
+# Basic box plot
+p <- ggplot(data=hk_analysis, aes(x=sentiment_nb_fac, y=sentimentr)) +
+  geom_boxplot()
+
+
+# Rotate the box plot
+p <- p + coord_flip()
+
+p
+
+```
+
+```{r}
+plot(hk_analysis$sentimentr,hk_analysis$sentiment_nb)
+
+# Add least squares fitted line to this plot
+abline(lm(hk_analysis$sentimentr~hk_analysis$sentiment_nb))
+```
+
+```{r}
+plot(sg_analysis$sentimentr,sg_analysis$sentiment_nb)
+
+# Add least squares fitted line to this plot
+abline(lm(sg_analysis$sentimentr~sg_analysis$sentiment_nb))
+```
+
+
+```{r}
+lm.sent <- lm(hk_analysis$sentimentr~hk_analysis$sentiment_nb)
+
+lm.sent
+```
+
+```{r}
+library(nnet)
+mlogit <- multinom(hk_analysis$sentiment_nb~hk_analysis$sentimentr)
+
+
+mlogit
+```
+
+```{r}
+# do the same with month
+# this is from may 2021 to oct 2021, oct 2021 to feb 2022
+y_sg_mo <- sg_group_mo$sentiment_mean
+time_mo <- as.Date(paste0(sg_group_mo$month,"-1"))
+sg_zoo_mo <- zoo(y_sg_mo, time_mo)
+impact_open_sg_mo_3 <- CausalImpact(sg_zoo, c(as.Date("2021-05-01"), sgopen-1), c(sgopen, sgopen2))
+
+plot(impact_open_sg_mo_3)
+summary(impact_open_sg_mo_3, "report")
+summary(impact_open_sg_mo_3)
+
+# above is sg, here below is hk
+
+y_hk_mo <- hk_group_mo$sentiment_mean
+time_hk_mo <- as.Date(paste0(hk_group_mo$month,"-1"))
+hk_zoo_mo <- zoo(y_hk_mo, time_hk_mo)
+
+impact_open_hk_mo_3 <- CausalImpact(hk_zoo, c(as.Date("2021-05-01"), sgopen-1), c(sgopen, sgopen2))
+
+plot(impact_open_hk_mo_3)
+summary(impact_open_hk_mo_3, "report")
+summary(impact_open_hk_mo_3)
+```
+
+```{r}
+install.packages("tseries")
+```
+
+```{r}
+# testing to have multiple
+
+hk_sg_combine <- cbind(hk_zoo_mo, sg_zoo_mo)
+#hk_sg_combine <- cbind(hk_zoo, sg_zoo)
+combine_impact <- CausalImpact(hk_sg_combine, c(start, sgopen-1), c(sgopen, end))
+plot(combine_impact, c("original", "pointwise"))
+summary(combine_impact, "report")
+summary(combine_impact)
+```
+
+```{r}
+correlation <- window(hk_sg_combine_nb, start = start, end = sgopen)
+cor(correlation)
+```
+
+```{r}
+# using start = 10/1/2021, y = NB
+hk_sg_combine_nb <- cbind(hk_zoo_mo_nb, sg_zoo_mo_nb)
+#hk_sg_combine_nb <- cbind(hk_zoo_nb, sg_zoo_nb)
+combine_impact_nb <- CausalImpact(hk_sg_combine_nb, c(start, sgopen-1), c(sgopen, end))
+plot(combine_impact_nb, c("original", "pointwise"))
+summary(combine_impact_nb, "report")
+summary(combine_impact_nb)
+```
+
+```{r}
+# using start = sg_open, end = sg_open2, y = sentimentR
+hk_sg_combine_2 <- cbind(hk_zoo, sg_zoo)
+combine_impact_2 <- CausalImpact(hk_sg_combine_2, c(sgopen, sgopen2-1), c(sgopen2, end))
+plot(combine_impact_2, c("original", "pointwise"))
+summary(combine_impact_2, "report")
+summary(combine_impact_2)
+```
+
+```{r}
+# using start = sg_open, end = sg_open2, y = nb
+hk_sg_combine_2_nb <- cbind(hk_zoo_nb, sg_zoo_nb)
+combine_impact_2_nb <- CausalImpact(hk_sg_combine_2_nb, c(sgopen, sgopen2-1), c(sgopen2, end))
+plot(combine_impact_2_nb, c("original", "pointwise"))
+summary(combine_impact_2_nb, "report")
+summary(combine_impact_2_nb)
+```
+
