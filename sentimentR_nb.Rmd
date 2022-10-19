@@ -1,0 +1,514 @@
+---
+title: "jul20"
+output: html_document
+---
+
+```{r setup, include=FALSE}
+knitr::opts_chunk$set(echo = TRUE)
+```
+
+```{r}
+library(academictwitteR)
+
+# combining the dataframes from first and second data collection
+hk2020 <- bind_tweets(data_path = "data_hk_2020_update/", user = TRUE, output_format = "tidy")
+
+# checking what date/time the first and the last tweet were created
+max(hk2020$created_at)
+min(hk2020$created_at)
+
+# same for 2021 HK tweets
+hk2021 <- bind_tweets(data_path = "data_hk_2021_update/", user = TRUE, output_format = "tidy")
+max(hk2021$created_at)
+min(hk2021$created_at)
+
+# same process for 2022 HK tweets
+hk2022 <- bind_tweets(data_path = "data_hk_2022_update/", user = TRUE, output_format = "tidy")
+max(hk2022$created_at)
+min(hk2022$created_at)
+```
+
+```{r}
+# combining the dataframes from first and second data collection - SG version
+
+sg2020 <- bind_tweets(data_path = "data_sg_2020_update/", user = TRUE, output_format = "tidy")
+max(sg2020$created_at)
+min(sg2020$created_at)
+
+# 2021 SG
+sg2021 <- bind_tweets(data_path = "data_sg_2021_update/", user = TRUE, output_format = "tidy")
+max(sg2021$created_at)
+min(sg2021$created_at)
+
+# 2022 SG
+sg2022 <- bind_tweets(data_path = "data_sg_2022_update/", user = TRUE, output_format = "tidy")
+max(sg2022$created_at)
+min(sg2022$created_at)
+```
+
+```{r}
+# hk tweets - combine all the tweets from 2020 to 2022
+hk_combine <- rbind(hk2020,hk2021)
+hk_combine <- rbind(hk_combine, hk2022)
+
+# getting policy/ government related tweets
+clean_hk <- grep('polic?|law?|govern?|rule?|lockdown?|social.distanc?|border?|safe distanc?|mandat?|compulsory vaccination|measure?|outdoor mask?|advisor?|restrict?|social gather?|circuit breaker?|Contact tracing|re-open?|reopen?|phase|quarantine reduc?|quarantine arrangement|suspen?|Travel Bubble?|quarantine-free|quarantine duration|Border control|strateg?|Living with COVID?|zero-COVID|quarantine hotel?|public gather?|Emergency Regulations Ordinance|Centre for Health Protection |CHP｜PPE|self-isolat?|four-person limit|Hospital Authority|cross-border|cash handout?|Compulsory Quarantine Order|track?|1.5 meters|capacity|mobile cabin hospital|eating.in|dine-in|ban|Return2hk scheme|surveillance|sinovac|LeaveHomeSafe|CoronaVac|essential requirement|Penny\'s Bay|hamster?|chinchilla?|zero Covid|school closure?|vaccine hesitancy|inducement?|mass testing|Nicole Kidman', hk_combine$text, ignore.case=TRUE)
+
+# getting a cleaned version of the dataset which only include policy/ government related tweets
+hk_clean <- hk_combine[clean_hk,]
+
+# getting rid of retweet
+retweet_hk <- grep('^RT @', hk_clean$text, ignore.case=TRUE)
+hk_clean_no_retweet <- hk_clean[-retweet_hk,]
+```
+
+```{r}
+# same process for SG tweets
+sg_combine <- rbind(sg2020,sg2021)
+sg_combine <- rbind(sg_combine, sg2022)
+
+# getting policy/ government related tweets
+clean_sg <- grep('polic?|law?|govern?|rule?|lockdown?|social distanc?|border?|safe distanc?|mandate?|vacc?|measure?|outdoor mask?|SingHealth Polyclinics|SHP|advisor?|restrict?|social gather?|circuit breaker?|Contact tracing|SafeEntry|TraceTogether|re-open?|reopen?|phase|Reciprocal Green Lane|Periodic Commuting Arrangement|PCA|RGL|quarantine reduc?|quarantine arrangement|Air Travel Pass|COVID-19 (Temporary Measures) Act 2020|suspen?|Travel Bubble?|quarantine-free|quarantine duration|Vaccinated Travel Lane|vtl|Border control|strateg?|Living with COVID?', sg_combine$text, ignore.case=TRUE)
+
+sg_clean <- sg_combine[clean_sg,]
+
+# getting rid of the retweets
+retweet_sg <- grep('^RT @', sg_clean$text, ignore.case=TRUE)
+sg_clean_no_retweet <- sg_clean[-retweet_sg,]
+
+```
+
+```{r}
+#  using sentimentr to calculate the sentiment score
+library(sentimentr)
+library(dplyr)
+hk_clean_no_retweet <- hk_clean_no_retweet %>% mutate(sentimentr = sentiment_by(get_sentences(text))$ave_sentiment)
+
+sg_clean_no_retweet <- sg_clean_no_retweet %>% mutate(sentimentr = sentiment_by(get_sentences(text))$ave_sentiment)
+```
+
+```{r}
+summary(sg_clean_no_retweet)
+summary(hk_clean_no_retweet)
+```
+
+
+
+```{r}
+library(ISOweek)
+
+# getting the columns that I am interested in
+sg_analysis <- sg_clean_no_retweet %>% select(text, created_at, sentimentr)
+hk_analysis <- hk_clean_no_retweet %>% select(text, created_at, sentimentr)
+
+# getting the week of the tweeted date
+sg_analysis$week <- sg_analysis$created_at %>% ISOweek()
+hk_analysis$week <- hk_analysis$created_at %>% ISOweek()
+
+# getting the year and month of the tweeted date
+sg_analysis$month <- format(as.Date(sg_analysis$created_at), "%Y-%m")
+hk_analysis$month <- format(as.Date(hk_analysis$created_at), "%Y-%m")
+
+# group by week
+sg_group <- sg_analysis %>% group_by(week) %>%
+  summarise(sentiment_mean = mean(sentimentr), observations = n())
+head(sg_group)
+
+hk_group <- hk_analysis %>% group_by(week) %>%
+  summarise(sentiment_mean = mean(sentimentr), observations = n())
+head(hk_group)
+
+# group by month
+sg_group_mo <- sg_analysis %>% group_by(month) %>%
+  summarise(sentiment_mean = mean(sentimentr), observations = n())
+head(sg_group_mo)
+
+hk_group_mo <- hk_analysis %>% group_by(month) %>%
+  summarise(sentiment_mean = mean(sentimentr), observations = n())
+head(sg_group_mo)
+```
+
+```{r}
+# calculate the causal impact of the experiment
+library(tidyverse)
+library(CausalImpact)
+
+# here are some of the important dates 
+# aug 18 2021 - the govt announced their travel bubbles burst
+# Oct 2021 - singapore reopen
+# Dec 2021 - omicron wave
+# Feb 2022 - singapore continue to open
+
+
+start <- as.Date("2020-10-01")
+bubble <- as.Date("2021-08-19")
+sgopen <- as.Date("2021-10-01")
+omicron <- as.Date("2021-12-01")
+sgopen2 <- as.Date("2022-02-01")
+end <- as.Date("2022-05-30")
+
+
+# by week
+# singapore's causal impact result
+y_sg <- sg_group$sentiment_mean
+time_sg <- ISOweek2date(paste0(sg_group$week,"-1"))
+sg_zoo <- zoo(y_sg, time_sg)
+impact_open_sg <- CausalImpact(sg_zoo, c(start, sgopen-1), c(sgopen, end))
+
+plot(impact_open_sg)
+summary(impact_open_sg, "report")
+summary(impact_open_sg)
+
+# below is hk's causual impact result
+y_hk <- hk_group$sentiment_mean
+time_hk <- ISOweek2date(paste0(hk_group$week,"-1"))
+hk_zoo <- zoo(y_hk, time_hk)
+
+impact_open_hk <- CausalImpact(hk_zoo, c(start, sgopen-1), c(sgopen, end))
+
+plot(impact_open_hk)
+summary(impact_open_hk, "report")
+summary(impact_open_hk)
+```
+
+```{r}
+# do the same with goroup by month
+# SG
+y_sg_mo <- sg_group_mo$sentiment_mean
+time_mo <- as.Date(paste0(sg_group_mo$month,"-1"))
+sg_zoo_mo <- zoo(y_sg_mo, time_mo)
+impact_open_sg_mo <- CausalImpact(sg_zoo_mo, c(start, sgopen-1), c(sgopen, end))
+
+plot(impact_open_sg_mo)
+summary(impact_open_sg_mo, "report")
+summary(impact_open_sg_mo)
+
+# HK
+y_hk_mo <- hk_group_mo$sentiment_mean
+time_hk_mo <- as.Date(paste0(hk_group_mo$month,"-1"))
+hk_zoo_mo <- zoo(y_hk_mo, time_hk_mo)
+
+impact_open_hk_mo <- CausalImpact(hk_zoo_mo, c(start, sgopen-1), c(sgopen, end))
+
+plot(impact_open_hk_mo)
+summary(impact_open_hk_mo, "report")
+summary(impact_open_hk_mo)
+```
+
+```{r}
+# repeat by week and by month but this time with the second time opening
+
+# by week
+y_sg <- sg_group$sentiment_mean
+time_sg <- ISOweek2date(paste0(sg_group$week,"-1"))
+sg_zoo <- zoo(y_sg, time_sg)
+impact_open_sg_2 <- CausalImpact(sg_zoo, c(sgopen, sgopen2-1), c(sgopen2, end))
+
+plot(impact_open_sg_2)
+summary(impact_open_sg_2, "report")
+summary(impact_open_sg_2)
+
+# above is sg, here below is hk
+
+y_hk <- hk_group$sentiment_mean
+time_hk <- ISOweek2date(paste0(hk_group$week,"-1"))
+hk_zoo <- zoo(y_hk, time_hk)
+
+impact_open_hk_2 <- CausalImpact(hk_zoo, c(sgopen, sgopen2-1), c(sgopen2, end))
+
+plot(impact_open_hk_2)
+summary(impact_open_hk_2, "report")
+summary(impact_open_hk_2)
+```
+
+```{r}
+# by month
+y_sg_mo <- sg_group_mo$sentiment_mean
+time_mo <- as.Date(paste0(sg_group_mo$month,"-1"))
+sg_zoo_mo <- zoo(y_sg_mo, time_mo)
+impact_open_sg_mo_2 <- CausalImpact(sg_zoo_mo, c(sgopen, sgopen2-1), c(sgopen2, end))
+
+plot(impact_open_sg_mo_2)
+summary(impact_open_sg_mo_2, "report")
+summary(impact_open_sg_mo_2)
+
+# above is sg, here below is hk
+
+y_hk_mo <- hk_group_mo$sentiment_mean
+time_hk_mo <- as.Date(paste0(hk_group_mo$month,"-1"))
+hk_zoo_mo <- zoo(y_hk_mo, time_hk_mo)
+
+impact_open_hk_mo_2 <- CausalImpact(hk_zoo_mo, c(sgopen, sgopen2-1), c(sgopen2, end))
+
+plot(impact_open_hk_mo_2)
+summary(impact_open_hk_mo_2, "report")
+summary(impact_open_hk_mo_2)
+```
+
+
+```{r}
+# create corpus for later dictionary approach
+
+hkcorpus <- corpus(hk_analysis)
+summary(hkcorpus, n=10)
+
+sgcorpus <- corpus(sg_analysis)
+summary(sgcorpus, n=10)
+
+# key word in context
+kwic(hkcorpus, "covid", window=10)[1:20,]
+kwic(sgcorpus, "covid", window=10)[1:20,]
+
+# convert to dfm
+# further cleaning of the tokens
+hktoks <- tokens(hkcorpus, remove_punct = TRUE, remove_url=TRUE, verbose=TRUE)
+hktoks <- tokens_remove(
+  hktoks, c(stopwords("english"), "t.co", "https", "rt", "amp", "http", "t.c", "can", "u"))
+hkdfm <- dfm(hktoks, tolower=TRUE, verbose=TRUE)
+hkdfm <- dfm_trim(hkdfm, min_docfreq=3, verbose=TRUE)
+hkdfm
+
+sgtoks <- tokens(sgcorpus, remove_punct = TRUE, remove_url=TRUE, verbose=TRUE)
+sgtoks <- tokens_remove(
+  sgtoks, c(stopwords("english"), "t.co", "https", "rt", "amp", "http", "t.c", "can", "u"))
+sgdfm <- dfm(sgtoks, tolower=TRUE, verbose=TRUE)
+sgdfm <- dfm_trim(sgdfm, min_docfreq=3, verbose=TRUE)
+sgdfm
+```
+
+```{r}
+# machine learning
+
+training <- read.csv("training.csv", stringsAsFactors=FALSE)
+head(training)
+
+# create corpus object for the dataset 
+corpus_sentiment <- corpus(training, text_field = "clean_text")
+docvars(corpus_sentiment, "sent_score") <- training$category
+
+# splitting the training and testing set
+# shuffling to split into training and test set
+smp <- sample(c("train", "test"), size=ndoc(corpus_sentiment), 
+                prob=c(0.80, 0.20), replace=TRUE)
+train <- which(smp=="train")
+test <- which(smp=="test")
+
+# tokenizing and creating DFM
+characters <- tokens(corpus_sentiment, remove_punct = T)
+sentdfm <- dfm(characters)
+
+library(quanteda.textmodels)
+
+# training Naive Bayes model
+nb <- textmodel_nb(sentdfm[train,], docvars(sentdfm, "category")[train])
+# predicting labels for test set
+preds <- predict(nb, newdata = sentdfm[test,])
+# computing the confusion matrix
+(cm <- table(preds, docvars(sentdfm, "category")[test]))
+
+# function to compute performance metrics
+precrecall <- function(mytable, verbose=TRUE) {
+    truePositives <- mytable[3,3]
+    falsePositives <- sum(mytable[3,]) - truePositives
+    falseNegatives <- mytable[1,2] + mytable[1,3]
+    precision <- truePositives / (truePositives + falsePositives)
+    recall <- truePositives / (truePositives + falseNegatives)
+    if (verbose) {
+        print(mytable)
+        cat("\n precision =", round(precision, 2), 
+            "\n    recall =", round(recall, 2), "\n")
+    }
+    invisible(c(precision, recall))
+}
+
+# precision and recall
+precrecall(cm)
+# accuracy
+sum(diag(cm)) / sum(cm)
+
+```
+
+```{r}
+# run the model
+hk_pred <- predict(nb, newdata = hkdfm[,], force = T)
+hk_pred
+
+# re-code the sentiment "class" to scores
+hk_analysis$sentiment_nb <- as.numeric(hk_pred)
+hk_analysis$sentiment_nb[hk_analysis$sentiment_nb==1] <- -1
+hk_analysis$sentiment_nb[hk_analysis$sentiment_nb==2] <- 0
+hk_analysis$sentiment_nb[hk_analysis$sentiment_nb==3] <- 1
+
+# again, but with sg tweets
+sg_pred <- predict(nb, newdata = sgdfm[,], force = T)
+sg_pred
+
+sg_analysis$sentiment_nb <- as.numeric(sg_pred)
+sg_analysis$sentiment_nb[sg_analysis$sentiment_nb==1] <- -1
+sg_analysis$sentiment_nb[sg_analysis$sentiment_nb==2] <- 0
+sg_analysis$sentiment_nb[sg_analysis$sentiment_nb==3] <- 1
+
+mean(sg_analysis$sentiment_nb) # .2660169
+mean(hk_analysis$sentiment_nb) # -0.2027492
+
+
+```
+
+```{r}
+# use the naive bayes result to do casual impact model
+sg_group_nb <- sg_analysis %>% group_by(week) %>%
+  summarise(sentiment_mean = mean(sentiment_nb), observations = n())
+head(sg_group_nb)
+
+hk_group_nb <- hk_analysis %>% group_by(week) %>%
+  summarise(sentiment_mean = mean(sentiment_nb), observations = n())
+head(hk_group_nb)
+
+# singapore
+y_sg_nb <- sg_group_nb$sentiment_mean
+time_nb <- ISOweek2date(paste0(sg_group_nb$week,"-1"))
+sg_zoo_nb <- zoo(y_sg_nb, time_nb)
+impact_open_sg_nb <- CausalImpact(sg_zoo_nb, c(start, sgopen-1), c(sgopen, end))
+
+plot(impact_open_sg_nb)
+summary(impact_open_sg_nb, "report")
+summary(impact_open_sg_nb)
+
+# hk
+y_hk_nb <- hk_group_nb$sentiment_mean
+time_hk_nb <- ISOweek2date(paste0(hk_group_nb$week,"-1"))
+hk_zoo_nb <- zoo(y_hk_nb, time_hk_nb)
+
+impact_open_hk_nb <- CausalImpact(hk_zoo_nb, c(start, sgopen-1), c(sgopen, end))
+
+plot(impact_open_hk_nb)
+summary(impact_open_hk_nb, "report")
+summary(impact_open_hk_nb)
+```
+
+```{r}
+# use sentiment_nb to do casual impact, continued.
+# by month
+sg_group_mo_nb <- sg_analysis %>% group_by(month) %>%
+  summarise(sentiment_mean = mean(sentiment_nb), observations = n())
+head(sg_group_mo_nb)
+
+hk_group_mo_nb <- hk_analysis %>% group_by(month) %>%
+  summarise(sentiment_mean = mean(sentiment_nb), observations = n())
+head(hk_group_mo_nb)
+
+# Singapore
+y_sg_mo_nb <- sg_group_mo_nb$sentiment_mean
+time_mo_nb <- as.Date(paste0(sg_group_mo_nb$month,"-1"))
+sg_zoo_mo_nb <- zoo(y_sg_mo_nb, time_mo_nb)
+impact_open_sg_mo_nb <- CausalImpact(sg_zoo_mo_nb, c(start, sgopen-1), c(sgopen, end))
+
+plot(impact_open_sg_mo_nb)
+summary(impact_open_sg_mo_nb, "report")
+summary(impact_open_sg_mo_nb)
+
+# hk
+y_hk_mo_nb <- hk_group_mo_nb$sentiment_mean
+time_hk_mo_nb <- as.Date(paste0(hk_group_mo_nb$month,"-1"))
+hk_zoo_mo_nb <- zoo(y_hk_mo_nb, time_hk_mo_nb)
+
+impact_open_hk_mo_nb <- CausalImpact(hk_zoo_mo_nb, c(start, sgopen-1), c(sgopen, end))
+
+plot(impact_open_hk_mo_nb)
+summary(impact_open_hk_mo_nb, "report")
+summary(impact_open_hk_mo_nb)
+```
+
+
+```{r}
+# second timeline, but this time by week
+sg_group_nb <- sg_analysis %>% group_by(week) %>%
+  summarise(sentiment_mean = mean(sentiment_nb), observations = n())
+head(sg_group_nb)
+
+hk_group_nb <- hk_analysis %>% group_by(week) %>%
+  summarise(sentiment_mean = mean(sentiment_nb), observations = n())
+head(hk_group_nb)
+
+# Singapore
+y_sg_nb <- sg_group_nb$sentiment_mean
+time_nb <- ISOweek2date(paste0(sg_group_nb$week,"-1"))
+sg_zoo_nb <- zoo(y_sg_nb, time_nb)
+impact_open_sg_nb_2 <- CausalImpact(sg_zoo_nb, c(sgopen, sgopen2-1), c(sgopen2, end))
+
+plot(impact_open_sg_nb_2)
+summary(impact_open_sg_nb_2, "report")
+summary(impact_open_sg_nb_2)
+
+# hk
+
+y_hk_nb <- hk_group_nb$sentiment_mean
+time_hk_nb <- ISOweek2date(paste0(hk_group_nb$week,"-1"))
+hk_zoo_nb <- zoo(y_hk_nb, time_hk_nb)
+
+impact_open_hk_nb_2 <- CausalImpact(hk_zoo_nb, c(sgopen, sgopen2-1), c(sgopen2, end))
+
+plot(impact_open_hk_nb_2)
+summary(impact_open_hk_nb_2, "report")
+summary(impact_open_hk_nb_2)
+```
+
+```{r}
+# use sentiment_nb to do casual impact
+# 2nd timeline, by month
+sg_group_mo_nb <- sg_analysis %>% group_by(month) %>%
+  summarise(sentiment_mean = mean(sentiment_nb), observations = n())
+head(sg_group_mo_nb)
+
+hk_group_mo_nb <- hk_analysis %>% group_by(month) %>%
+  summarise(sentiment_mean = mean(sentiment_nb), observations = n())
+head(hk_group_mo_nb)
+
+# singapore
+y_sg_mo_nb <- sg_group_mo_nb$sentiment_mean
+time_mo_nb <- as.Date(paste0(sg_group_mo_nb$month,"-1"))
+sg_zoo_mo_nb <- zoo(y_sg_mo_nb, time_mo_nb)
+impact_open_sg_mo_nb_2 <- CausalImpact(sg_zoo_mo_nb, c(sgopen, sgopen2-1), c(sgopen2, end))
+
+plot(impact_open_sg_mo_nb_2)
+summary(impact_open_sg_mo_nb_2, "report")
+summary(impact_open_sg_mo_nb_2)
+
+# hk
+
+y_hk_mo_nb <- hk_group_mo_nb$sentiment_mean
+time_hk_mo_nb <- as.Date(paste0(hk_group_mo_nb$month,"-1"))
+hk_zoo_mo_nb <- zoo(y_hk_mo_nb, time_hk_mo_nb)
+
+impact_open_hk_mo_nb_2 <- CausalImpact(hk_zoo_mo_nb, c(sgopen, sgopen2-1), c(sgopen2, end))
+
+plot(impact_open_hk_mo_nb_2)
+summary(impact_open_hk_mo_nb_2, "report")
+summary(impact_open_hk_mo_nb_2)
+```
+
+```{r}
+# top features in hk dfm
+library(quanteda.textplots)
+
+topfeatures(hkdfm, 50)
+textplot_wordcloud(hkdfm, rotation=0, min_size=.75, max_size=3, max_words=50)
+
+
+```
+
+```{r}
+# re-coding the sentiment scores to class 
+hk_analysis$r_cat <- 0
+hk_analysis$r_cat[hk_analysis$sentimentr< (-0.05)] <- -1
+hk_analysis$r_cat[hk_analysis$sentimentr> (0.05)] <- 1
+  
+sg_analysis$r_cat <- 0
+sg_analysis$r_cat[sg_analysis$sentimentr< (-0.05)] <- -1
+sg_analysis$r_cat[sg_analysis$sentimentr> (0.05)] <- 1
+```
+
+```{r}
+plot()
+```
+
